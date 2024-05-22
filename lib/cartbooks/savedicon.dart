@@ -47,7 +47,7 @@ class _SavedBookIconState extends State<SavedBookIcon> {
           'bookTitle': widget.bookInfo['name'],
           'authorName': widget.bookInfo['author'],
           'imagepath': widget.bookInfo['book image'],
-         // 'pdfpath': widget.bookInfo['url'],
+          'pdfpath': widget.bookInfo['url'],
         });
       }
     }

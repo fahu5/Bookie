@@ -104,7 +104,7 @@ class _BooksGridState extends State<BooksGrid> {
                 'name': widget.bookInfo['name'],
                 'author':  widget.bookInfo['author'],
                 'book image': widget.bookInfo['book image'],
-                 //'url': widget.bookInfo['url'],
+                 'url': widget.bookInfo['url'],
               },
             )
 

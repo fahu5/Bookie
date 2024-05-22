@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'calender.dart';
 
-
 class ReadingTracker extends StatefulWidget {
   ReadingTracker({Key? key});
 
@@ -31,7 +30,9 @@ class _ReadingTrackerState extends State<ReadingTracker> {
   void _startTimer() {
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       setState(() {
+        // Increment the radialAxisUsageTime
         radialAxisUsageTime++;
+        // Update data in Firestore
         _updateDataForDay(lastRecordDate, radialAxisUsageTime);
       });
     });
@@ -90,7 +91,7 @@ class _ReadingTrackerState extends State<ReadingTracker> {
       await _firestore
           .collection('users')
           .doc(user!.uid)
-          .collection('reading_data') // Changed subcollection name
+          .collection('reading_data')
           .doc(_formatDate(date))
           .set({
         'timestamp': FieldValue.serverTimestamp(),
@@ -129,57 +130,103 @@ class _ReadingTrackerState extends State<ReadingTracker> {
         padding: const EdgeInsets.all(25.0),
         child: Column(
           children: [
-            SizedBox(
-              height: 200,
-              child: SfRadialGauge(
-                axes: <RadialAxis>[
-                  RadialAxis(
-                    minimum: 0,
-                    maximum: 70,
-                    showLabels: false,
-                    showTicks: false,
-                    startAngle: 270,
-                    endAngle: 270,
-                    axisLineStyle: const AxisLineStyle(
-                      thickness: 0.1,
-                      color: Colors.blueGrey,
-                      thicknessUnit: GaugeSizeUnit.factor,
-                      cornerStyle: CornerStyle.bothCurve,
-                    ),
-                    pointers: <GaugePointer>[
-                      RangePointer(
-                        value: radialAxisUsageTime.toDouble(),
-                        width: 0.1,
-                        sizeUnit: GaugeSizeUnit.factor,
-                        cornerStyle: CornerStyle.bothCurve,
-                        gradient: const SweepGradient(colors: <Color>[
-
-                          Color(0xFF00a9b5),
-                          Color(0xFFa4edeb)
-                        ], stops: <double>[
-                          0.25,
-                          0.75
-                        ]),
-                      ),
-                      MarkerPointer(
-                        value: radialAxisUsageTime.toDouble(),
-                        markerType: MarkerType.circle,
-                        color: Colors.red,
-                      )
-                    ],
-                  )
-                ],
-              ),
+            GaugeDisplay(radialAxisUsageTime: radialAxisUsageTime, updateDataForDay: _updateDataForDay),
+            const SizedBox(
+              height: 450,
+              width: 450, // Adjust size as needed
+              child: HeatmapCalendarScreen(),
 
             ),
-            const SizedBox(
-              height: 400,
-              width: 400, // Adjust size as needed
-              child: HeatmapCalendarScreen(),
+            const SizedBox(height: 20), // Add some space between widgets and text
+            const Text(
+              'Click on the date to see your reading times',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black,
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
 
+class GaugeDisplay extends StatefulWidget {
+  final int radialAxisUsageTime;
+  final Function(DateTime, int) updateDataForDay;
+
+  const GaugeDisplay({Key? key, required this.radialAxisUsageTime, required this.updateDataForDay}) : super(key: key);
+
+  @override
+  _GaugeDisplayState createState() => _GaugeDisplayState();
+}
+
+class _GaugeDisplayState extends State<GaugeDisplay> {
+  late Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      setState(() {
+        // Increment the radialAxisUsageTime
+        widget.updateDataForDay(DateTime.now(), widget.radialAxisUsageTime + 1);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      child: SfRadialGauge(
+        axes: <RadialAxis>[
+          RadialAxis(
+            minimum: 0,
+            maximum: 90,
+            showLabels: false,
+            showTicks: false,
+            startAngle: 270,
+            endAngle: 270,
+            axisLineStyle: const AxisLineStyle(
+              thickness: 0.1,
+              color: Colors.blueGrey,
+              thicknessUnit: GaugeSizeUnit.factor,
+              cornerStyle: CornerStyle.bothCurve,
+            ),
+            pointers: <GaugePointer>[
+              RangePointer(
+                value: widget.radialAxisUsageTime.toDouble(),
+                width: 0.1,
+                sizeUnit: GaugeSizeUnit.factor,
+                cornerStyle: CornerStyle.bothCurve,
+                gradient: const SweepGradient(colors: <Color>[
+                  Color(0xFF00a9b5),
+                  Color(0xFFa4edeb)
+                ], stops: <double>[
+                  0.25,
+                  0.75
+                ]),
+              ),
+              MarkerPointer(
+                value: widget.radialAxisUsageTime.toDouble(),
+                markerType: MarkerType.circle,
+                color: Colors.red,
+              )
+            ],
+          )
+        ],
       ),
     );
   }

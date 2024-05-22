@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_heatmap_calendar/flutter_heatmap_calendar.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:async';
+import 'package:provider/provider.dart';
+import 'appusage_provider.dart';
 
 class HeatmapCalendarScreen extends StatefulWidget {
   const HeatmapCalendarScreen({Key? key}) : super(key: key);
@@ -12,289 +11,91 @@ class HeatmapCalendarScreen extends StatefulWidget {
 }
 
 class _HeatmapCalendarScreenState extends State<HeatmapCalendarScreen> {
-  late Map<DateTime, int> datasets;
-  late Map<int, Color> colorsets = {};
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  late User? user;
-  late DateTime _currentDate;
-  late Timer _timer;
-  late DateTime _lastDate = DateTime.now();
-  int _appUsage = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    datasets = {};
-   // _initializeColorSets();
-    _currentDate = DateTime.now();
-    _startTimer();
-    FirebaseAuth.instance.authStateChanges().listen((User? firebaseUser) {
-      setState(() {
-        user = firebaseUser;
-      });
-      if (user != null) {
-        _fetchUserData(_currentDate);
-        _setUpRealTimeListener(); // Call the method here
-      }
-    });
-  }
-
-
-  /*void _initializeColorSets() {
-    colorsets = {
-      0: Colors.red,
-      1: Colors.lightGreen,
-      2: Colors.lightGreen,
-      3: Colors.lightGreen,
-      4: Colors.lightGreen,
-      5: Colors.green,
-      6: Colors.green,
-    };
-  }*/
-
-  Future<void> _fetchUserData(DateTime date) async {
-    try {
-      if (user != null) {
-        String dateString = _formatDate(date);
-        DocumentSnapshot<Map<String, dynamic>> userDoc = await _firestore
-            .collection('users')
-            .doc(user!.uid)
-            .collection('calendar_data')
-            .doc(dateString)
-            .get();
-
-        if (userDoc.exists) {
-          Map<String, dynamic> userData = userDoc.data()!;
-          if (userData.containsKey('app_usage')) {
-            setState(() {
-              _appUsage = userData['app_usage'];
-              datasets = {date: _appUsage};
-            });
-          }
-          if (userData.containsKey('color_value')) {
-            setState(() {
-              int colorValue = userData['color_value'];
-              colorsets = {0: Color(colorValue)};
-            });
-          }
-        } else {
-          setState(() {
-            _appUsage = 0;
-            datasets = {date: 0};
-            //_initializeColorSets();
-          });
-        }
-      }
-    } catch (error) {
-      print("Error fetching user data: $error");
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    return "${date.year}-${date.month}-${date.day}";
-  }
-
-  bool _isSameDay(DateTime date1, DateTime date2) {
-    return date1.year == date2.year &&
-        date1.month == date2.month &&
-        date1.day == date2.day;
-  }
-
-  void _startTimer() {
-    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      setState(() {
-        _appUsage++;
-        _updateAppUsageTime();
-      });
-    });
-  }
-
-  void _updateAppUsageTime() async {
-    String dateString = _formatDate(_currentDate);
-
-    // Check if the current date is different from the last updated date
-    DateTime now = DateTime.now();
-    if (!_isSameDay(_lastDate, now)) {
-      _appUsage = 0; // Reset app usage count for a new day
-    }
-    _lastDate = now; // Update the last updated date
-
-    int colorValue = _getColorForAppUsage(_appUsage); // Get color based on app usage
-    try {
-      await _updateDataForDay(_currentDate, _appUsage, colorValue);
-
-      // Update colorsets with the new color value based on app usage
-      setState(() {
-        colorsets = {
-          for (int i = 0; i < 7; i++) // Assuming you have 7 keys for colorsets
-            i: Color(colorValue),
-        };
-      });
-    } catch (error) {
-      print("Error updating data for day: $error");
-    }
-  }
-
-  int _getColorForAppUsage(int appUsage) {
-    if (appUsage < 30) {
-      return Colors.lightGreen.value;
-    } else if (appUsage < 60) {
-      return Colors.lightGreen.value;
-    } else {
-      return Colors.green.value;
-    }
-  }
-
-  Future<void> _updateDataForDay(
-      DateTime date, int appUsage, int colorValue) async {
-    String dateString = _formatDate(date);
-    DocumentSnapshot<Map<String, dynamic>> docSnapshot = await _firestore
-        .collection('users')
-        .doc(user!.uid)
-        .collection('calendar_data')
-        .doc(dateString)
-        .get();
-
-    try {
-      if (docSnapshot.exists) {
-        // Data exists for the current date, update the existing data
-        await _firestore
-            .collection('users')
-            .doc(user!.uid)
-            .collection('calendar_data')
-            .doc(dateString)
-            .update({
-          'app_usage': appUsage,
-          'color_value': colorValue,
-          'timestamp': Timestamp.now(),
-        });
-      } else {
-        // Data does not exist for the current date, store new data
-        await _firestore
-            .collection('users')
-            .doc(user!.uid)
-            .collection('calendar_data')
-            .doc(dateString)
-            .set({
-          'app_usage': appUsage,
-          'color_value': colorValue,
-          'timestamp': Timestamp.now(),
-        });
-      }
-    } catch (error) {
-      print("Error updating data for day: $error");
-    }
-  }
-  void _setUpRealTimeListener() {
-    String dateString = _formatDate(_currentDate);
-    DocumentReference documentReference = _firestore
-        .collection('users')
-        .doc(user!.uid)
-        .collection('calendar_data')
-        .doc(dateString);
-
-    documentReference.snapshots().listen((DocumentSnapshot snapshot) {
-      if (snapshot.exists) {
-        Map<String, dynamic> userData = snapshot.data() as Map<String, dynamic>;
-        if (userData.containsKey('app_usage')) {
-          setState(() {
-            _appUsage = userData['app_usage'];
-            datasets = {_currentDate: _appUsage};
-          });
-        }
-        if (userData.containsKey('color_value')) {
-          setState(() {
-            int colorValue = userData['color_value'];
-            colorsets = {0: Color(colorValue)};
-          });
-        }
-      } else {
-        setState(() {
-          _appUsage = 0;
-          datasets = {_currentDate: 0};
-         // _initializeColorSets();
-        });
-      }
-    });
-  }
-
-
+  // Adjusted color sets for better visibility
+  final Map<int, Color> colorsets = {
+    1: Colors.green,  // 1-14 minutes
+    2: Colors.green.shade600,  // 15-29 minutes
+    3: Colors.green.shade700,  // 30-44 minutes
+    4: Colors.green.shade800,  // 45-59 minutes
+    5: Colors.green.shade900,  // 60 or more minutes
+  };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.deepPurpleAccent,
+        title: const Text('Reading Record', style: TextStyle(color: Colors.white)),
+        centerTitle: true,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Center(
-          child: StreamBuilder<User?>(
-            stream: FirebaseAuth.instance.authStateChanges(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const CircularProgressIndicator();
-              }
-              if (snapshot.hasError) {
-                return Text('Error: ${snapshot.error}');
-              }
-              if (snapshot.hasData && snapshot.data != null) {
-                user = snapshot.data;
-                return HeatMapCalendar(
-                  flexible: true,
-                  colorMode: ColorMode.opacity,
-                  colorTipCount: 7,
-                  datasets: datasets,
-                  colorsets: colorsets,
-                  onClick: (value) async {
-                    DateTime clickedDate = value;
-                    int appUsage = await _fetchAppUsage(clickedDate);
-                    String message =
-                        'App usage on ${clickedDate.day}/${clickedDate.month}/${clickedDate.year}: $appUsage minutes';
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(message)));
-                  },
-                  onMonthChange: (date) {
-                    setState(() {
-                      _currentDate = date;
-                      _fetchUserData(date);
-                    });
-                  },
-                );
-              } else {
-                return const Text('User not authenticated.');
-              }
+          child: Consumer<AppUsageProvider>(
+            builder: (context, appUsageProvider, child) {
+              // Debugging: Print the datasets to verify values
+              print('Datasets: ${appUsageProvider.datasets}');
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '*Click on the Date to see your reading time.',
+                    style: TextStyle(fontSize: 12, color: Colors.black),
+                  ),
+                  const SizedBox(height: 8.0),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(8.0),
+                      child: HeatMapCalendar(
+                        flexible: true,
+                        colorMode: ColorMode.color, // Use color mode for direct color differentiation
+                        colorTipCount: colorsets.length,  // Number of color levels
+                        datasets: appUsageProvider.datasets.map((date, usage) {
+                          // Debugging: Print each date and usage value
+                          print('Date: $date, Usage: $usage');
+                          return MapEntry(date, _getColorLevel(usage));
+                        }),
+                        colorsets: colorsets,
+                        onClick: (value) async {
+                          try {
+                            DateTime clickedDate = value;
+                            int appUsage = await appUsageProvider.fetchAppUsage(clickedDate);
+                            String message = 'Reading Time: ${clickedDate.day}/${clickedDate.month}/${clickedDate.year}: $appUsage minutes';
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error fetching data: $e')));
+                          }
+                        },
+                        onMonthChange: (date) {
+                          appUsageProvider.fetchUserData(date);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              );
             },
           ),
-
         ),
-
       ),
     );
   }
 
-  Future<int> _fetchAppUsage(DateTime date) async {
-    if (user != null) {
-      String dateString = _formatDate(date);
-      DocumentSnapshot<Map<String, dynamic>> userDoc = await _firestore
-          .collection('users')
-          .doc(user!.uid)
-          .collection('calendar_data')
-          .doc(dateString)
-          .get();
-
-      if (userDoc.exists) {
-        Map<String, dynamic> userData = userDoc.data()!;
-        if (userData.containsKey('app_usage')) {
-          return userData['app_usage'];
-        }
-      }
+  // Helper function to get the color level based on usage
+  int _getColorLevel(int usage) {
+    if (usage >= 60) {
+      return 5;
+    } else if (usage >= 45) {
+      return 4;
+    } else if (usage >= 30) {
+      return 3;
+    } else if (usage >= 15) {
+      return 2;
+    } else if (usage >= 1) {
+      return 1;
+    } else {
+      return 0;  // No usage
     }
-    return 0;
-  }
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
   }
 }
-
-
